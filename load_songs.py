@@ -1,9 +1,12 @@
 import json
 import os
-import chromadb  # Import ChromaDB library
+import chromadb
 
-# Initialize ChromaDB client
-chroma_client = chromadb.Client()
+# Specify the path to your persistent storage folder
+PERSISTENCE_PATH = os.path.join(os.path.dirname(__file__), "chroma_data") 
+
+# Initialize ChromaDB client with persistence
+chroma_client = chromadb.PersistentClient(path=PERSISTENCE_PATH)
 
 # Attempts to retrieve an existing collection or create a new one
 try:
@@ -13,7 +16,7 @@ except Exception as e:
     collection = chroma_client.create_collection(name="song_collection")
 
 # Directory with JSON song files
-directory_path = os.path.join(os.path.dirname(__file__))
+directory_path = os.path.join(os.path.dirname(__file__), "ChurchSongs")
 
 def load_song_data(file_path):
     """Load song data from a JSON file."""
@@ -50,8 +53,6 @@ results = collection.query(
     query_texts=[user_query],  # Use the user's query text for searching
     n_results=3  # Number of results to return
 )
-
-
 
 print("Top 3 songs based on your description:")
 if 'ids' in results and 'metadatas' in results and len(results['ids']) > 0:
