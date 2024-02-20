@@ -13,7 +13,7 @@ except Exception as e:
     collection = chroma_client.create_collection(name="song_collection")
 
 # Directory with JSON song files
-directory_path = 'C:\\Users\\andre\\Desktop\\ChurchJSONFiles'
+directory_path = os.path.join(os.path.dirname(__file__))
 
 def load_song_data(file_path):
     """Load song data from a JSON file."""
