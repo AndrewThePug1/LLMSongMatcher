@@ -1,2 +1,1 @@
-sentence-transformers==2.2.0
-numpy==1.22.3
+chromadb==0.4.22

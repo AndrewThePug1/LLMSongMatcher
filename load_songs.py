@@ -1,13 +1,16 @@
 import json
 import os
-from sentence_transformers import SentenceTransformer
-from sentence_transformers import util
-import numpy as np
+import chromadb  # Import ChromaDB library
 
+# Initialize ChromaDB client
+chroma_client = chromadb.Client()
 
-
-# Initialize the SentenceTransformer model
-model = SentenceTransformer('all-MiniLM-L6-v2')
+# Attempts to retrieve an existing collection or create a new one
+try:
+    collection = chroma_client.get_collection(name="song_collection")
+except Exception as e:
+    print("Collection not found, creating a new one...")
+    collection = chroma_client.create_collection(name="song_collection")
 
 # Directory with JSON song files
 directory_path = 'C:\\Users\\andre\\Desktop\\ChurchJSONFiles'
@@ -17,55 +20,45 @@ def load_song_data(file_path):
     with open(file_path, 'r', encoding='utf-8') as file:
         return json.load(file)
 
-def generate_embeddings(song_data):
-    """Generate an embedding for the given song data."""
-    # Concatenate metadata and lyrics into a single text block
-    text_to_embed = f"Title: {song_data['metadata']['title']} Artist: {song_data['metadata']['artist']} Language: {song_data['metadata']['language']} Singers: {', '.join(song_data['metadata']['singers'])} Labels: {', '.join(song_data['metadata']['labels'])} Lyrics: {song_data['lyrics']}"
-    # Generate and return the embedding
-    return model.encode(text_to_embed)
-
-
-
-# Function to calculate cosine similarity
-def find_top_similar_songs(query_embedding, song_embeddings, top_n=3):
-    similarities = []
-    for song, embedding in song_embeddings.items():
-        similarity = util.pytorch_cos_sim(query_embedding, embedding)
-        similarities.append((song, similarity.item()))
-
-    # Sort by similarity
-    similarities.sort(key=lambda x: x[1], reverse=True)
-
-    # Return top N similar songs
-    return similarities[:top_n]
-
-
-# Loop through each file in the directory
-embeddings = {}
+# Loops through each file in the directory and add them to ChromaDB
 for filename in os.listdir(directory_path):
     if filename.endswith('.json'):
         file_path = os.path.join(directory_path, filename)
-        
-        # Load the song data from the JSON file
         song_data = load_song_data(file_path)
         
-        # Generate embeddings for the song
-        embedding = generate_embeddings(song_data)
+        # Adjust metadata to ensure all values are in acceptable formats
+        metadata = song_data['metadata']
+        # Convert list fields to strings
+        metadata['singers'] = ', '.join(metadata.get('singers', []))  # Converts list to str, if exists
+        metadata['labels'] = ', '.join(metadata.get('labels', []))  # Adjusts for the 'labels' or similar field
         
-        # Store the embedding in a dictionary, using filename as the key
-        embeddings[filename] = embedding
+        # Add song data to the ChromaDB collection using default embedding
+        collection.add(
+            documents=[song_data['lyrics']],  # Uses lyrics as the document content for embedding
+            metadatas=[metadata],  # Uses the adjusted metadata
+            ids=[filename]  # Uses the filename as a unique identifier
+        )
+      
 
-        # Print progress
-        print(f"Generated embedding for {filename}")
+print("Completed adding songs to ChromaDB collection.")
 
-
+# Handling user query
 user_query = input("Describe a song: ")
-query_embedding = model.encode(user_query)
 
-# Find top 3 similar songs
-top_songs = find_top_similar_songs(query_embedding, embeddings)
+# Query method uses text for searching, not direct embeddings
+results = collection.query(
+    query_texts=[user_query],  # Use the user's query text for searching
+    n_results=3  # Number of results to return
+)
 
-# Print top 3 songs
+
+
 print("Top 3 songs based on your description:")
-for song, similarity in top_songs:
-    print(f"{song} with similarity: {similarity}")
+if 'ids' in results and 'metadatas' in results and len(results['ids']) > 0:
+    for i in range(len(results['ids'][0])):  # Assuming single query, hence [0]
+        song_id = results['ids'][0][i]
+        song_metadata = results['metadatas'][0][i]
+        song_distance = results['distances'][0][i]
+        print(f"Song ID: {song_id}, Title: {song_metadata['title']}, Artist: {song_metadata['artist']}, Distance: {song_distance}")
+else:
+    print("No results found.")
